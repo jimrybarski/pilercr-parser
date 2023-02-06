@@ -1,0 +1,18 @@
+[package]
+name = "pilercr-parser"
+authors = ["Jim Rybarski <jim@rybarski.com>"]
+description = "A parser for the output of the PILER-CR CRISPR array annotation tool"
+readme = "README.md"
+homepage = "https://github.com/jimrybarski/pilercr-parser"
+repository = "https://github.com/jimrybarski/pilercr-parser"
+license = "MIT"
+keywords = ["pilercr", "piler-cr", "CRISPR", "bioinformatics"]
+categories = ["parsing", "science"]
+version = "1.0.0"
+edition = "2021"
+
+[badges]
+maintenance = { status = "passively-maintained" }
+
+[dependencies]
+nom = "7.1.3"
