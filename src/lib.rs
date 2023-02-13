@@ -61,8 +61,7 @@ fn parse_raw_repeat_spacer(input: &str) -> IResult<&str, RawRepeatSpacer> {
             let repeat_diff = data.11;
             let spacer = data.13;
             let start = data.1.parse::<usize>().unwrap() - 1;
-            let end =
-                start + repeat_diff.len() - repeat_diff.matches('-').count() + spacer.len() + 1;
+            let end = start + repeat_diff.len() + spacer.len();
             let raw_repeat_spacer = RawRepeatSpacer {
                 start,
                 end,
@@ -159,25 +158,28 @@ fn convert_raw_rs_to_final_rs<'a>(
     consensus_repeat: &'a str,
     raw_repeat_spacers: &[RawRepeatSpacer<'a>],
 ) -> Vec<RepeatSpacer<'a>> {
-    raw_repeat_spacers
-        .iter()
-        .map(|raw| {
-            assert_eq!(raw.repeat_diff.len(), consensus_repeat.len());
-            let repeat = raw
-                .repeat_diff
-                .chars()
-                .zip(consensus_repeat.chars())
-                .filter(|(r, _)| *r != '-')
-                .map(|(r, c)| if r == '.' { c } else { r })
-                .collect::<String>();
-            RepeatSpacer {
-                start: raw.start,
-                end: raw.end,
-                repeat,
-                spacer: raw.spacer,
-            }
-        })
-        .collect()
+    let mut output = vec![];
+    let mut total_gap_count = 0usize;
+    for raw in raw_repeat_spacers {
+        assert_eq!(raw.repeat_diff.len(), consensus_repeat.len());
+        let repeat = raw
+            .repeat_diff
+            .chars()
+            .zip(consensus_repeat.chars())
+            .filter(|(r, _)| *r != '-')
+            .map(|(r, c)| if r == '.' { c } else { r })
+            .collect::<String>();
+        let gap_count = raw.repeat_diff.matches('-').count();
+        let rs = RepeatSpacer {
+            start: raw.start - total_gap_count,
+            end: raw.end - total_gap_count - gap_count,
+            repeat,
+            spacer: raw.spacer,
+        };
+        output.push(rs);
+        total_gap_count += gap_count;
+    }
+    output
 }
 
 #[cfg(test)]
@@ -189,7 +191,7 @@ mod tests {
         let input = "       462      36   100.0      29  CTTTCTGAAG    ....................................    CGTGCTCGCTTTGAATTTGTAGAACCCGA";
         let expected = RawRepeatSpacer {
             start: 461,
-            end: 461 + 36 + 29 + 1,
+            end: 461 + 36 + 29,
             repeat_diff: "....................................",
             spacer: "CGTGCTCGCTTTGAATTTGTAGAACCCGA",
         };
@@ -247,7 +249,7 @@ mod tests {
             accession: "MGYG000232241_150",
             consensus_repeat_sequence: "AAGTTTCCGTCCCCTTTCGGGGAATCATTTAGAAAAT--A",
             start: 3831,
-            end: 4034,
+            end: 4030,
             order: 17,
             repeat_spacers: vec![
                 RepeatSpacer {
@@ -266,7 +268,7 @@ mod tests {
                     start: 3983,
                     end: 4030,
                     spacer: "ATCACATTCA",
-                    repeat: "GGGTTTCCGTCCCCTTTCGGGGAATCATTTAGAAAATA".to_string(),
+                    repeat: "GGGTTTCCGTCCCCTTCGGGGAATCATTTAGAAAATA".to_string(),
                 },
             ],
         };
