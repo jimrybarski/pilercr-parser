@@ -2,10 +2,9 @@
 //! Parses the output produced by PILER-CR (<https://www.drive5.com/pilercr/>), a CRISPR array
 //! annotation tool.
 //!
-//! PILER-CR v1.06 (at least) reports incorrect coordinates if any of the repeat sequences contains
-//! gaps. This parses will correct those errors, and also determines the actual repeat sequence of
-//! each repeat-spacer (which is given only as a difference pattern to the consensus in the
-//! PILER-CR output).
+//! PILER-CR v1.06 (at least) reports incorrect coordinates if any of the repeat sequences contains gaps.
+//! This parser will correct those errors, and also provides the repeat sequence of each repeat-spacer
+//! (which is given only as a difference pattern to the consensus in the PILER-CR output).
 //!
 //! ## Example
 //!
