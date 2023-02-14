@@ -5,7 +5,7 @@ A parser for the output of the [PILER-CR](https://www.drive5.com/pilercr/) CRISP
 
 Add the following to Cargo.toml:
 
-`pilercr-parser = 1.0.0`
+`pilercr-parser = 1.0.1`
 
 ### Usage
 

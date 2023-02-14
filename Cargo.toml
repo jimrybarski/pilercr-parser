@@ -8,7 +8,7 @@ repository = "https://github.com/jimrybarski/pilercr-parser"
 license = "MIT"
 keywords = ["pilercr", "piler-cr", "CRISPR", "bioinformatics"]
 categories = ["parsing", "science"]
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 
 [badges]
