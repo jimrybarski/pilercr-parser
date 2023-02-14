@@ -1,44 +1,126 @@
+#![deny(warnings, missing_docs)]
+//! Parses the output produced by PILER-CR (<https://www.drive5.com/pilercr/>), a CRISPR array
+//! annotation tool.
+//!
+//! PILER-CR v1.06 (at least) reports incorrect coordinates if any of the repeat sequences contains
+//! gaps. This parses will correct those errors, and also determines the actual repeat sequence of
+//! each repeat-spacer (which is given only as a difference pattern to the consensus in the
+//! PILER-CR output).
+//!
+//! ## Example
+//!
+//! ```rust
+//! use std::fs::File;
+//! use std::io::{BufReader, Read};
+//!
+//! let file = File::open("examples/example.txt").unwrap();
+//! let mut reader = BufReader::new(file);
+//! let mut input = String::new();
+//! reader.read_to_string(&mut input).unwrap();
+//! let arrays = pilercr_parser::parse(&input).unwrap();
+//! for array in arrays {
+//!     println!(
+//!         "{} has {} arrays",
+//!         array.accession,
+//!         array.repeat_spacers.len()
+//!     );
+//! }
+//! ```
+
 use nom::{
     bytes::complete::tag,
     character::complete::{
         alpha0, char, digit0, digit1, line_ending, multispace0, multispace1, not_line_ending,
     },
-    multi::many1,
+    error::Error,
+    multi::{many0, many1},
     number::complete::float,
     sequence::{pair, tuple},
-    IResult, InputTakeAtPosition,
+    Err, IResult, InputTakeAtPosition,
 };
 
 #[derive(Debug, PartialEq)]
+/// Represents the information of a repeat-spacer as reflected in the PILER-CR output.
+/// The coordinates here can be incorrect (we will correct them later) and the
+/// repeat sequence has not yet been constructed.
 struct RawRepeatSpacer<'a> {
+    /// Zero-indexed, inclusive start coordinate.
     start: usize,
+    /// Zero-indexed, exclusive end coordinate.
     end: usize,
+    /// A pattern representing the difference between this repeat and the consensus repeat.
     repeat_diff: &'a str,
+    /// Sequence of the spacer.
     spacer: &'a str,
 }
 
 #[derive(Debug, PartialEq)]
-struct RepeatSpacer<'a> {
-    start: usize,
-    end: usize,
-    repeat: String,
-    spacer: &'a str,
+/// A single repeat-spacer.
+pub struct RepeatSpacer<'a> {
+    /// Zero-indexed, inclusive start coordinate.
+    pub start: usize,
+    /// Zero-indexed, exclusive end coordinate.
+    pub end: usize,
+    /// Sequence of the repeat.
+    pub repeat: String,
+    /// Sequence of the spacer.
+    pub spacer: &'a str,
 }
 
 #[derive(Debug, PartialEq)]
-struct Array<'a> {
-    accession: &'a str,
-    order: usize,
-    start: usize,
-    end: usize,
-    consensus_repeat_sequence: &'a str,
-    repeat_spacers: Vec<RepeatSpacer<'a>>,
+/// A single CRISPR array.
+pub struct Array<'a> {
+    /// Accession of the contig/genome.
+    pub accession: &'a str,
+    /// The Nth CRISPR array in the PILER-CR output.
+    pub order: usize,
+    /// Zero-indexed, inclusive start coordinate.
+    pub start: usize,
+    /// Zero-indexed, exclusive end coordinate.
+    pub end: usize,
+    /// The consensus repeat sequence for this array. May include gaps.
+    pub consensus_repeat_sequence: &'a str,
+    /// The repeat-spacers in this array.
+    pub repeat_spacers: Vec<RepeatSpacer<'a>>,
 }
 
+/// Parses the output of PILER-CR for a single contig/genome.
+pub fn parse(input: &str) -> Result<Vec<Array>, Err<Error<&str>>> {
+    let result = tuple((skip_header, many0(parse_array)))(input);
+    match result {
+        Ok((_, (_, arrays))) => Ok(arrays),
+        Err(e) => Err(e),
+    }
+}
+
+/// Gets space-delimited text.
 fn not_space(input: &str) -> IResult<&str, &str> {
     input.split_at_position_complete(char::is_whitespace)
 }
 
+/// Skips the lines at the beginning of the PILER-CR output.
+fn skip_header(input: &str) -> IResult<&str, ()> {
+    let result = tuple((
+        skip_one_line,
+        skip_one_line,
+        skip_empty_line,
+        skip_one_line,
+        skip_empty_line,
+        skip_empty_line,
+        skip_empty_line,
+        skip_one_line,
+        skip_empty_line,
+        skip_empty_line,
+        skip_empty_line,
+    ))(input);
+    match result {
+        Ok((remainder, _)) => Ok((remainder, ())),
+        Err(e) => Err(e),
+    }
+}
+
+/// Parses a single repeat spacer. These may have incorrect coordinates, and the repeat sequence
+/// has not yet been determined.
 fn parse_raw_repeat_spacer(input: &str) -> IResult<&str, RawRepeatSpacer> {
     let result = tuple((
         multispace0,
@@ -92,6 +174,7 @@ fn skip_empty_line(input: &str) -> IResult<&str, ()> {
     }
 }
 
+/// Gets the consensus sequence from the last line of an array and discards everything else.
 fn parse_array_summary_line(input: &str) -> IResult<&str, &str> {
     let result = tuple((
         multispace0,
@@ -110,6 +193,7 @@ fn parse_array_summary_line(input: &str) -> IResult<&str, &str> {
     }
 }
 
+/// Parses a single CRISPR array.
 fn parse_array(input: &str) -> IResult<&str, Array> {
     let result = tuple((
         tag("Array "),
@@ -154,6 +238,9 @@ fn parse_array(input: &str) -> IResult<&str, Array> {
     }
 }
 
+/// Due to a bug in PILER-CR, coordinates don't take gaps in repeat sequences into account.
+/// We correct those coordinates here. Additionally, each repeat has a difference pattern instead
+/// of an actual sequence, so we determine what the true repeat sequence is.
 fn convert_raw_rs_to_final_rs<'a>(
     consensus_repeat: &'a str,
     raw_repeat_spacers: &[RawRepeatSpacer<'a>],
@@ -232,6 +319,39 @@ mod tests {
 
     #[test]
     fn test_parse_array() {
+        let input = "Array 5
+>MGYG000273829_14
+
+       Pos  Repeat     %id  Spacer  Left flank    Repeat                                  Spacer
+==========  ======  ======  ======  ==========    ====================================    ======
+     16576      36   100.0      30  AAACAGTTCT    ....................................    ACGAACTTAGTACCCTTTTCTGGGCGGCAT
+     16642      36   100.0      30  TGGGCGGCAT    ....................................    CCGCAGGTGCTACCGCTGTTATACTCTGTT
+     16708      36   100.0      30  ATACTCTGTT    ....................................    CGTAAATCGTTGGCGAAACGCTACCAACTG
+     16774      36   100.0      30  CTACCAACTG    ....................................    CCTCGGTCTGCTCTAACAGATCCCCCAAGT
+     16840      36   100.0      30  TCCCCCAAGT    ....................................    ACAGAGAAAGAAAGAGAGATTAACGACTAC
+     16906      36   100.0      30  TAACGACTAC    ....................................    TGAAACGGAGTGGACAGGTAAAGGAATGGG
+     16972      36   100.0      30  AAGGAATGGG    ....................................    TGCGGTCCCTTGGTTCCGTCAACAACATCA
+     17038      36   100.0      30  AACAACATCA    ....................................    TGTCCTATTCCCTTTTATGCTGCGTGTATA
+     17104      36   100.0      30  TGCGTGTATA    ....................................    AATACAAGCATAAAGAACGAACCGCAACGG
+     17170      36   100.0          ACCGCAACGG    ....................................    AGGGAA
+==========  ======  ======  ======  ==========    ====================================
+        10      36              30                GCTGTAGTTCCCGGTTATTACTTGGTATGTTATAAT
+
+
+";
+        let (_, actual) = parse_array(input).unwrap();
+        assert_eq!(actual.repeat_spacers.len(), 10);
+        assert_eq!(actual.accession, "MGYG000273829_14");
+        assert_eq!(
+            actual.consensus_repeat_sequence,
+            "GCTGTAGTTCCCGGTTATTACTTGGTATGTTATAAT"
+        );
+        assert_eq!(actual.repeat_spacers[0].start, 16575);
+        assert_eq!(actual.repeat_spacers[9].start, 17169);
+    }
+
+    #[test]
+    fn test_parse_array_with_gaps() {
         let input = "Array 18
 >MGYG000232241_150
 
