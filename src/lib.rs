@@ -60,6 +60,14 @@ pub struct RepeatSpacer<'a> {
     pub start: usize,
     /// Zero-indexed, exclusive end coordinate.
     pub end: usize,
+    /// Zero-indexed, inclusive start coordinate of the spacer.
+    pub spacer_start: usize,
+    /// Zero-indexed, exclusive end coordinate of the spacer.
+    pub spacer_end: usize,
+    /// Zero-indexed, inclusive start coordinate of the repeat.
+    pub repeat_start: usize,
+    /// Zero-indexed, exclusive end coordinate of the repeat.
+    pub repeat_end: usize,
     /// Sequence of the repeat.
     pub repeat: String,
     /// Sequence of the spacer.
@@ -259,6 +267,10 @@ fn convert_raw_rs_to_final_rs<'a>(
         let rs = RepeatSpacer {
             start: raw.start - total_gap_count,
             end: raw.end - total_gap_count - gap_count,
+            repeat_start: raw.start - total_gap_count,
+            repeat_end: raw.start - total_gap_count + repeat.len(),
+            spacer_start: raw.start - total_gap_count + repeat.len(),
+            spacer_end: raw.end - total_gap_count - gap_count,
             repeat,
             spacer: raw.spacer,
         };
@@ -374,18 +386,30 @@ mod tests {
                 RepeatSpacer {
                     start: 3831,
                     end: 3905,
+                    repeat_start: 3831,
+                    repeat_end: 3871,
+                    spacer_start: 3871,
+                    spacer_end: 3905,
                     spacer: "GAATTACATCGTATGCCAATACGCAGTTGCTTTT",
                     repeat: "AAATTTCCGTCCCCTTTCGGGGAATCATTTAGAAAATCCA".to_string(),
                 },
                 RepeatSpacer {
                     start: 3905,
                     end: 3983,
+                    repeat_start: 3905,
+                    repeat_end: 3942,
+                    spacer_start: 3942,
+                    spacer_end: 3983,
                     spacer: "TGTACTACTATGCGGTATTCCATCTGAAGGATGGCGGCTAC",
                     repeat: "AAGTTTCCGTCCCCTTTCGGGGAATCATTTAGAAAAT".to_string(),
                 },
                 RepeatSpacer {
                     start: 3983,
                     end: 4030,
+                    repeat_start: 3983,
+                    repeat_end: 4020,
+                    spacer_start: 4020,
+                    spacer_end: 4030,
                     spacer: "ATCACATTCA",
                     repeat: "GGGTTTCCGTCCCCTTCGGGGAATCATTTAGAAAATA".to_string(),
                 },
