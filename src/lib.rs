@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 #![deny(warnings, missing_docs)]
 //! Parses the output produced by PILER-CR (<https://www.drive5.com/pilercr/>), a CRISPR array
 //! annotation tool.
